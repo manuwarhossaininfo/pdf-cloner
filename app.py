@@ -69,7 +69,7 @@ url_block = st.text_area(
 )
 
 with st.expander("⚙️ Advanced Options"):
-    chunk_size_pages = st.slider("Chunk size (approx. pages worth per chunk)", 5, 40, 20)
+    chunk_size_pages = st.slider("Chunk size (approx. pages worth per chunk)", 3, 15, 6)
     delay = st.slider("Delay between API calls (seconds)", 1, 10, 3)
 
 st.markdown("---")
@@ -113,7 +113,7 @@ if st.button("🎯 Generate Exam-Style Notes PDF"):
         st.error("❌ কোনো কন্টেন্ট পাওয়া যায়নি।")
         st.stop()
 
-    words_per_chunk = chunk_size_pages * 450
+    words_per_chunk = chunk_size_pages * 300
     chunks = chunk_plain_text(combined_text, words_per_chunk=words_per_chunk)
 
     st.info(f"মোট {len(chunks)}টা chunk-এ ভাগ করা হয়েছে। প্রসেসিং শুরু হচ্ছে...")
@@ -127,8 +127,10 @@ if st.button("🎯 Generate Exam-Style Notes PDF"):
         status_text.text(f"Processing chunk {idx+1}/{len(chunks)}...")
         try:
             chunk_info = f"(এটি সম্পূর্ণ কন্টেন্টের {idx+1} নম্বর অংশ, মোট {len(chunks)} অংশের মধ্যে)"
-            fragment = generate_notes_html(api_key, model_name, chunk["content"], chunk_info)
+            fragment, was_truncated = generate_notes_html(api_key, model_name, chunk["content"], chunk_info)
             body_fragments.append(fragment)
+            if was_truncated:
+                st.warning(f"⚠️ Chunk {idx+1} এর আউটপুট token limit এ কেটে গেছে — Chunk size আরও ছোট করে আবার ট্রাই করো।")
         except Exception as e:
             failed_chunks.append(idx + 1)
             st.warning(f"⚠️ Chunk {idx+1} এ সমস্যা: {e}")

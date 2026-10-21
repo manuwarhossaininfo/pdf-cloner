@@ -3,13 +3,29 @@ from weasyprint import HTML
 from weasyprint.text.fonts import FontConfiguration
 from modules.style_template import get_full_css
 
+SAFETY_SETTINGS = [
+    {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+    {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+]
+
+GENERATION_CONFIG = {
+    "temperature": 0.3,
+    "max_output_tokens": 8192,
+}
+
 
 def generate_notes_html(api_key, model_name, content_text, chunk_info=""):
     genai.configure(api_key=api_key.strip())
-    model = genai.GenerativeModel(model_name)
+    model = genai.GenerativeModel(
+        model_name,
+        safety_settings=SAFETY_SETTINGS,
+        generation_config=GENERATION_CONFIG,
+    )
 
     prompt = f"""
-তুমি একজন এক্সপার্ট নোট-মেকার। নিচের কন্টেন্ট থেকে একটি কমপ্যাক্ট, পরীক্ষা-উপযোগী নোট বানাতে হবে।
+তুমি একজন অভিজ্ঞ এক্সপার্ট নোট-মেকার, যে পরীক্ষার্থীদের জন্য কমপ্যাক্ট কিন্তু অত্যন্ত ডিটেইলড নোট বানায়।
 আউটপুট শুধুমাত্র HTML fragment হবে — <html>, <head>, <style>, বা markdown কোড ফেন্স (```) থাকবে না।
 
 শুধু এই ক্লাসগুলো ব্যবহার করবে:
@@ -21,30 +37,55 @@ def generate_notes_html(api_key, model_name, content_text, chunk_info=""):
 - <table class="info-table">...</table>  → তুলনামূলক/শ্রেণীবদ্ধ তথ্যের জন্য বাধ্যতামূলক
 - <div class="flow-diagram"><div class="flow-box">ধাপ ১</div><div class="flow-arrow">↓</div><div class="flow-box">ধাপ ২</div></div>  → ধারাবাহিক প্রক্রিয়া/হায়ারার্কির জন্য বাধ্যতামূলক
 
-কঠোর নিয়ম:
-1. কোনো প্যারাগ্রাফ হুবহু কপি না করে, ছোট ছোট "টার্ম- উত্তর" বুলেটে ভাঙবে।
-2. তুলনামূলক/শ্রেণীবদ্ধ তথ্য অবশ্যই টেবিলে দিবে।
-3. ধারাবাহিক প্রক্রিয়া/স্তরবিন্যাস অবশ্যই flow-diagram এ দিবে।
-4. সকল সংখ্যা/তারিখ/নাম অবশ্যই <span class="highlight"> দিয়ে হাইলাইট করবে।
-5. একটা তথ্যও বাদ দেওয়া যাবে না, কিছুই সামারি করা যাবে না।
-6. প্রতিটা টপিক <div class="topic-section"> দিয়ে মোড়ানো থাকবে।
-7. টপিকগুলোর মাঝে কোনো page-break বা ফাঁকা জায়গা দিবে না — একটা শেষ হলে সাথে সাথে পরেরটা শুরু হবে, এটা সিস্টেম নিজেই সামলাবে।
-8. আউটপুট শুধু raw HTML fragment।
+=== সবচেয়ে গুরুত্বপূর্ণ নিয়ম (Information Loss একদম চলবে না) ===
+1. সোর্স কন্টেন্টে থাকা প্রতিটা তথ্য, সংখ্যা, তারিখ, নাম, সংজ্ঞা, কারণ, ফলাফল, উদাহরণ — সবকিছু নোটে থাকতেই হবে। কোনো অজুহাতে কিছু সামারি/স্কিপ/শর্টকাট করা যাবে না।
+2. একটা প্যারাগ্রাফে যদি ৫টা তথ্য থাকে, আউটপুটেও ৫টা আলাদা বুলেট পয়েন্ট থাকতে হবে — একটাও মিস করা যাবে না।
+3. যদি কোনো তথ্য/সংজ্ঞা/ব্যাখ্যা একটু কম স্পষ্ট মনে হয়, তাহলে নিজের জ্ঞান দিয়ে অতিরিক্ত sub-point (ছোট ব্যাখ্যা) যোগ করে পাঠকের বোঝা সহজ করে দিবে — কিন্তু সোর্সের কোনো তথ্য বাদ দেওয়া যাবে না, শুধু যোগ করা যাবে।
+4. মূল উদ্দেশ্য: এই নোট পড়েই যেন একজন স্টুডেন্ট মূল বই/সোর্স আর না পড়েও পরীক্ষায় সব উত্তর দিতে পারে — তাই ডিটেইল কমানো যাবে না, বরং দরকার হলে বাড়িয়ে দিবে।
+
+=== MCQ হ্যান্ডলিং নিয়ম ===
+যদি সোর্সে MCQ প্রশ্ন (প্রশ্ন + a/b/c/d অপশন + উত্তর) থাকে, তাহলে সেটাকে অপশনসহ না রেখে একটা তথ্যবহুল সরল লাইনে রূপান্তর করবে:
+
+উদাহরণ —
+সোর্স:
+"বাংলাদেশের জাতীয় ফুল কোনটি? a) গোলাপ b) শাপলা c) জবা d) সূর্যমুখী  উত্তর: b"
+রূপান্তরিত আউটপুট:
+<li><span class="key-term">বাংলাদেশের জাতীয় ফুল</span>- <span class="highlight">শাপলা</span></li>
+
+ভুল অপশনগুলো ফেলে দিবে, শুধু প্রশ্ন ও সঠিক উত্তরকে "টার্ম- উত্তর" আকারে বুলেট বানাবে, যাতে পড়তে সহজ হয়।
+
+=== অন্যান্য নিয়ম ===
+5. কোনো প্যারাগ্রাফ হুবহু কপি না করে, ছোট ছোট "টার্ম- উত্তর" বুলেটে ভাঙবে।
+6. তুলনামূলক/শ্রেণীবদ্ধ তথ্য অবশ্যই টেবিলে দিবে।
+7. ধারাবাহিক প্রক্রিয়া/স্তরবিন্যাস অবশ্যই flow-diagram এ দিবে।
+8. সকল সংখ্যা/তারিখ/নাম অবশ্যই <span class="highlight"> দিয়ে হাইলাইট করবে।
+9. প্রতিটা টপিক <div class="topic-section"> দিয়ে মোড়ানো থাকবে।
+10. টপিকগুলোর মাঝে কোনো page-break বা ফাঁকা জায়গা দিবে না।
+11. আউটপুট শুধু raw HTML fragment, অন্য কিছু নয়।
 
 {chunk_info}
 
-কন্টেন্ট:
+নিচের কন্টেন্টের প্রতিটা তথ্য বিস্তারিতভাবে, কিছু বাদ না দিয়ে উপরের নিয়ম মেনে নোট বানাও:
+
 {content_text}
 """
 
     response = model.generate_content(prompt)
+
+    try:
+        finish_reason = response.candidates[0].finish_reason
+    except Exception:
+        finish_reason = None
+
     html_fragment = response.text.strip()
 
     if html_fragment.startswith("```"):
         html_fragment = html_fragment.strip("`")
         html_fragment = html_fragment.replace("html", "", 1).strip()
 
-    return html_fragment
+    was_truncated = (finish_reason == 2)  # 2 = MAX_TOKENS in Gemini API
+
+    return html_fragment, was_truncated
 
 
 def build_final_html(brand_name, author_name, body_fragments):
@@ -61,7 +102,6 @@ def build_final_html(brand_name, author_name, body_fragments):
     <div class="page-break"></div>
     """
 
-    # টপিকগুলোর মাঝে কোনো page-break ছাড়াই সরাসরি জোড়া — জায়গা নষ্ট হবে না
     body_combined = "\n".join(body_fragments)
 
     final_html = f"""
