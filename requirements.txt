@@ -1,6 +1,6 @@
 streamlit
 google-generativeai
-weasyprint
+weasyprint==61.2
 pdfplumber
 PyPDF2
 requests
