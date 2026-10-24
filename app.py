@@ -67,7 +67,18 @@ url_block = st.text_area(
     height=100,
     placeholder="https://example.com/article-1\nhttps://example.com/article-2"
 )
-
+st.subheader("🧠 বিশেষ নির্দেশনা (ঐচ্ছিক)")
+custom_instruction = st.text_area(
+    "এই নির্দিষ্ট কন্টেন্টের জন্য Gemini কে আলাদা করে কী নির্দেশ দিতে চাও?",
+    height=120,
+    placeholder=(
+        "উদাহরণ:\n"
+        "- এটা ইংরেজি গ্রামার, তাই প্রতিটা rule এর সাথে একটা করে example sentence দিও\n"
+        "- শুধু তারিখ, সংখ্যা ও নামের উপর বেশি জোর দিও\n"
+        "- প্রতিটা সূত্র (formula) আলাদা হাইলাইট বক্সে দেখাও\n"
+        "- সংক্ষিপ্ত করো, শুধু সবচেয়ে গুরুত্বপূর্ণ পয়েন্টগুলো রাখো"
+    )
+)
 with st.expander("⚙️ Advanced Options"):
     chunk_size_pages = st.slider("Chunk size (approx. pages worth per chunk)", 3, 15, 6)
     delay = st.slider("Delay between API calls (seconds)", 1, 10, 3)
@@ -127,7 +138,9 @@ if st.button("🎯 Generate Exam-Style Notes PDF"):
         status_text.text(f"Processing chunk {idx+1}/{len(chunks)}...")
         try:
             chunk_info = f"(এটি সম্পূর্ণ কন্টেন্টের {idx+1} নম্বর অংশ, মোট {len(chunks)} অংশের মধ্যে)"
-            fragment, was_truncated = generate_notes_html(api_key, model_name, chunk["content"], chunk_info)
+            fragment, was_truncated = generate_notes_html(
+    api_key, model_name, chunk["content"], chunk_info, custom_instruction
+)
             body_fragments.append(fragment)
             if was_truncated:
                 st.warning(f"⚠️ Chunk {idx+1} এর আউটপুট token limit এ কেটে গেছে — Chunk size আরও ছোট করে আবার ট্রাই করো।")
